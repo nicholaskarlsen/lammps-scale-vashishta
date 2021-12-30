@@ -13,7 +13,7 @@
 ------------------------------------------------------------------------- */
 
 /* ----------------------------------------------------------------------
-   Contributing author:  Yongnan Xiong (HNU), xyn@hnu.edu.cn
+   Contributing author:  Yongnan Xiong (NU), xyn@hnu.edu.cn
                          Aidan Thompson (SNL)
 ------------------------------------------------------------------------- */
 
@@ -71,6 +71,7 @@ PairVashishta::~PairVashishta()
     memory->destroy(setflag);
     memory->destroy(cutsq);
     memory->destroy(neighshort);
+    memory->destroy(scale);
   }
 }
 
@@ -155,6 +156,7 @@ void PairVashishta::compute(int eflag, int vflag)
 
       twobody(&params[ijparam],rsq,fpair,eflag,evdwl);
 
+      fpair *= scale[1][1];
       fxtmp += delx*fpair;
       fytmp += dely*fpair;
       fztmp += delz*fpair;
@@ -196,6 +198,13 @@ void PairVashishta::compute(int eflag, int vflag)
         threebody(&params[ijparam],&params[ikparam],&params[ijkparam],
                   rsq1,rsq2,delr1,delr2,fj,fk,eflag,evdwl);
 
+        fj[0] *= scale[1][1];
+        fj[1] *= scale[1][1];
+        fj[2] *= scale[1][1];
+        fk[0] *= scale[1][1];
+        fk[1] *= scale[1][1];
+        fk[2] *= scale[1][1];
+
         fxtmp -= fj[0] + fk[0];
         fytmp -= fj[1] + fk[1];
         fztmp -= fj[2] + fk[2];
@@ -230,7 +239,7 @@ void PairVashishta::allocate()
   memory->create(setflag,n+1,n+1,"pair:setflag");
   memory->create(cutsq,n+1,n+1,"pair:cutsq");
   memory->create(neighshort,maxshort,"pair:neighshort");
-
+  memory->create(scale,n+1,n+1,"pair:scale");
   map = new int[n+1];
 }
 
@@ -249,14 +258,37 @@ void PairVashishta::settings(int narg, char **/*arg*/)
 
 void PairVashishta::coeff(int narg, char **arg)
 {
+  int n;
+
   if (!allocated) allocate();
 
+  // NOTE: Possibly need to change map_element2type?
   map_element2type(narg-3,arg+3);
 
   // read potential file and initialize potential parameters
 
   read_file(arg[2]);
   setup_params();
+
+  // clear setflag since coeff() called once with I,J = * *
+
+  n = atom->ntypes;
+  for (int i = 1; i <= n; i++)
+    for (int j = i; j <= n; j++)
+      setflag[i][j] = 0;
+
+  // set setflag i,j for type pairs where both are mapped to elements
+
+  int count = 0;
+  for (int i = 1; i <= n; i++)
+    for (int j = i; j <= n; j++)
+      if (map[i] >= 0 && map[j] >= 0) {
+        scale[i][j] = 1.0;
+        setflag[i][j] = 1;
+        count++;
+      }
+
+  if (count == 0) error->all(FLERR,"Incorrect args for pair coefficients");
 }
 
 /* ----------------------------------------------------------------------
@@ -285,6 +317,7 @@ double PairVashishta::init_one(int i, int j)
 {
   if (setflag[i][j] == 0) error->all(FLERR,"All pair coeffs are not set");
 
+  scale[j][i] = scale[i][j];
   return cutmax;
 }
 
@@ -560,4 +593,12 @@ void PairVashishta::threebody(Param *paramij, Param *paramik, Param *paramijk,
   fk[2] = delr2[2]*(frad2+csfac2)-delr1[2]*facang12;
 
   if (eflag) eng = facrad;
+}
+
+
+void *PairVashishta::extract(const char *str, int &dim)
+{
+  dim = 2;
+  if (strcmp(str, "scale") == 0) return (void *) scale;
+  return NULL;
 }
