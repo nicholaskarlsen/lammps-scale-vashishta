@@ -33,6 +33,7 @@ class PairVashishta : public Pair {
   void coeff(int, char **);
   double init_one(int, int);
   void init_style();
+  void *extract(const char *, int &);
 
   static constexpr int NPARAMS_PER_LINE = 17;
 
@@ -48,6 +49,7 @@ class PairVashishta : public Pair {
   };
 
  protected:
+  double **scale;
   double cutmax;      // max cutoff for all elements
   Param *params;      // parameter set for an I-J-K interaction
   double r0max;       // largest value of r0
@@ -116,3 +118,4 @@ E: Potential file is missing an entry
 The potential file does not have a needed entry.
 
 */
+
